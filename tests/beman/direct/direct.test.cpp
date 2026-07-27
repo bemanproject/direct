@@ -386,3 +386,44 @@ static_assert(std::is_same_v<decltype(std::declval<D<Strong>>() <=> std::declval
 static_assert(std::is_same_v<decltype(std::declval<D<Weak>>() <=> std::declval<D<Weak>>()), std::weak_ordering>);
 
 #endif // BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
+
+// -----------------------------------------------------------------------
+// BEMAN_DIRECT_IS_COMPLETE recomputes its answer at each use.
+//
+// This is the property that a variable-template completeness trait gets
+// wrong. Such a trait is instantiated once per translation unit and freezes
+// the first answer, so a type that was incomplete when first asked about
+// still reads as incomplete after it has been defined -- and two
+// translation units reaching different answers for the same specialization
+// is ill-formed with no diagnostic required. The macro expands textually,
+// so overload resolution runs afresh at each point below.
+// -----------------------------------------------------------------------
+
+namespace completeness_probe_test {
+
+struct DefinedLater;
+struct NeverDefined;
+
+// Asked while incomplete.
+static_assert(!BEMAN_DIRECT_IS_COMPLETE(DefinedLater));
+static_assert(!BEMAN_DIRECT_IS_COMPLETE(NeverDefined));
+
+struct DefinedLater {
+    int i;
+};
+
+// Asked again after the definition: a memoizing trait would still say false.
+static_assert(BEMAN_DIRECT_IS_COMPLETE(DefinedLater));
+
+// A type that is never defined keeps reading as incomplete.
+static_assert(!BEMAN_DIRECT_IS_COMPLETE(NeverDefined));
+
+// Ordinary complete types, including ones direct is used with.
+static_assert(BEMAN_DIRECT_IS_COMPLETE(int));
+static_assert(BEMAN_DIRECT_IS_COMPLETE(std::vector<int>));
+static_assert(BEMAN_DIRECT_IS_COMPLETE(direct<int, sizeof(int), alignof(int)>));
+
+// Commas in the argument survive: the macro is variadic for this reason.
+static_assert(BEMAN_DIRECT_IS_COMPLETE(direct<int, 16, 8>));
+
+} // namespace completeness_probe_test

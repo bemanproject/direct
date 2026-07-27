@@ -3,8 +3,16 @@
 // This TU must fail to compile: unlike unique_ptr's accessors,
 // direct<T,...>::operator-> requires T to be complete at its point of
 // instantiation, because ptr() goes through std::launder, which rejects
-// incomplete types. This pins the documented contract (the proposal,
-// "Completeness requirements").
+// incomplete types. That requirement is the documented contract (the
+// proposal, "Completeness requirements").
+//
+// The marker this test matches is our own static_assert message, so what is
+// pinned is that *this implementation* names direct and the member at fault
+// rather than emitting a bare launder error. That is quality of
+// implementation. The proposal guarantees only that the violation is
+// ill-formed -- see "How far the requirement can be enforced" -- so no
+// program should depend on the wording, and a different implementation
+// failing this test is not non-conforming.
 
 #include <beman/direct/direct.hpp>
 

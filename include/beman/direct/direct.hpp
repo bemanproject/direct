@@ -213,15 +213,28 @@ class direct {
 
   private:
     static void check_fits() noexcept {
-        static_assert(detail::is_complete_v<T>,
+        static_assert(BEMAN_DIRECT_IS_COMPLETE(T),
                       "T must be complete at the point direct<T, Size, Align> is constructed, "
                       "destroyed, assigned, or emplaced");
         static_assert(sizeof(T) <= Size, "T does not fit in direct<T, Size, Align>'s storage; increase Size");
         static_assert(alignof(T) <= Align, "T's alignment exceeds direct<T, Size, Align>'s Align; increase Align");
     }
 
-    T*       ptr() noexcept { return std::launder(reinterpret_cast<T*>(storage_)); }
-    const T* ptr() const noexcept { return std::launder(reinterpret_cast<const T*>(storage_)); }
+    // used to create a consistent diagnostic across toolchains; best effort.
+    static void check_complete_for_access() noexcept {
+        static_assert(BEMAN_DIRECT_IS_COMPLETE(T),
+                      "T must be complete to dereference direct<T, Size, Align>; declare the "
+                      "accessor in the header and define it where T is complete");
+    }
+
+    T* ptr() noexcept {
+        check_complete_for_access();
+        return std::launder(reinterpret_cast<T*>(storage_));
+    }
+    const T* ptr() const noexcept {
+        check_complete_for_access();
+        return std::launder(reinterpret_cast<const T*>(storage_));
+    }
 
     alignas(Align) std::byte storage_[Size];
 };

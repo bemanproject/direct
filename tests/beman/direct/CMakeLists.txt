@@ -83,13 +83,13 @@ beman_direct_add_compile_failure_test(
 beman_direct_add_compile_failure_test(
     fail_nothrow_trait_incomplete
     "${CMAKE_CURRENT_SOURCE_DIR}/fail_nothrow_trait_incomplete.test.cpp"
-    "incomplete type"
+    "" # diagnostic comes from the standard library; wording is not portable
 )
 
 beman_direct_add_compile_failure_test(
     fail_accessor_incomplete
     "${CMAKE_CURRENT_SOURCE_DIR}/fail_accessor_incomplete.test.cpp"
-    "incomplete type"
+    "T must be complete to dereference"
 )
 
 add_library(

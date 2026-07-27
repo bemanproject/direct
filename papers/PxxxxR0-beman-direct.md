@@ -167,6 +167,29 @@ inherent: they construct or destroy a `T`. For `operator*` and `operator->` it f
 from `std::launder`, which is specified for complete object types only. This differs
 from `unique_ptr<T>`, whose accessors instantiate with `T` incomplete.
 
+### How far the requirement can be enforced
+
+Stating completeness as a Mandates means a violation inside one translation unit is
+ill-formed and diagnosed. Nothing stronger is available, and the proposal does not ask
+for it.
+
+Whether a type is complete is a property of the point at which the question is asked,
+not of the type. A program in which two translation units instantiate the same member
+with `T` complete in one and incomplete in the other is therefore ill-formed, no
+diagnostic required — the treatment the standard already gives completeness-sensitive
+facilities, and the reason repeated proposals for an `is_complete` trait have been
+rejected as unimplementable in any useful sense
+([std-proposals, 2021](https://lists.isocpp.org/std-proposals/2021/11/3310.php)). This
+proposal follows that convention rather than inventing a stronger guarantee it could
+not honor.
+
+An implementation is free to improve the message a violation produces, and the
+reference implementation does so, since the diagnostics that arise naturally — from
+`sizeof` on an incomplete type, or from `std::launder` — name neither `direct` nor the
+member at fault. That is quality of implementation. It is not a guarantee this
+proposal makes, and no program should depend on the wording or on a violation being
+caught at all.
+
 This is a real limitation, not merely a formality. The natural way to expose a
 pimpl'd implementation is a one-line accessor in the header:
 
