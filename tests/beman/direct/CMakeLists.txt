@@ -79,6 +79,13 @@ beman_direct_add_compile_failure_test(
     "T's alignment exceeds direct<T, Size, Align>'s Align; increase Align"
 )
 
+# Documents a known problem rather than a desired property; see the file.
+beman_direct_add_compile_failure_test(
+    fail_nothrow_trait_incomplete
+    "${CMAKE_CURRENT_SOURCE_DIR}/fail_nothrow_trait_incomplete.test.cpp"
+    "incomplete type"
+)
+
 beman_direct_add_compile_failure_test(
     fail_accessor_incomplete
     "${CMAKE_CURRENT_SOURCE_DIR}/fail_accessor_incomplete.test.cpp"

@@ -153,21 +153,62 @@ class direct {
     const T* operator->() const noexcept { return ptr(); }
 
     // [direct.relops]
+    //
+    // These are templates, following indirect's shape, for two reasons.
+    //
+    // A non-template friend whose return type depends on T has that return
+    // type computed when the class is instantiated, which requires T to be
+    // complete at the point direct<T, Size, Align> is merely named -- the one
+    // property this type exists to provide. Making them templates defers it
+    // to the point of use. (A deduced `auto` return type also defers, but
+    // leaves the signature unstated; an explicit return type on a template
+    // gives both.)
+    //
+    // The explicit return type additionally makes these SFINAE-friendly, so a
+    // T with no comparison operators removes the overload rather than relying
+    // on its body never being instantiated.
+    //
+    // Being templates, they also compare across reservations: two direct
+    // objects holding comparable types compare regardless of their Size and
+    // Align.
 
-    friend bool operator==(const direct& lhs, const direct& rhs) noexcept(noexcept(*lhs == *rhs)) {
+    template <class U, std::size_t S2, std::size_t A2>
+    friend auto operator==(const direct& lhs, const direct<U, S2, A2>& rhs) noexcept(noexcept(*lhs == *rhs))
+        -> decltype(static_cast<bool>(*lhs == *rhs)) {
         return *lhs == *rhs;
     }
 
 #if BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
-    friend auto operator<=>(const direct& lhs, const direct& rhs) { return detail::synth_three_way(*lhs, *rhs); }
-#else
-    friend bool operator!=(const direct& lhs, const direct& rhs) noexcept(noexcept(lhs == rhs)) {
-        return !(lhs == rhs);
+    template <class U, std::size_t S2, std::size_t A2>
+    friend auto operator<=>(const direct& lhs, const direct<U, S2, A2>& rhs) -> detail::synth_three_way_result<T, U> {
+        return detail::synth_three_way(*lhs, *rhs);
     }
-    friend bool operator<(const direct& lhs, const direct& rhs) { return *lhs < *rhs; }
-    friend bool operator>(const direct& lhs, const direct& rhs) { return rhs < lhs; }
-    friend bool operator<=(const direct& lhs, const direct& rhs) { return !(rhs < lhs); }
-    friend bool operator>=(const direct& lhs, const direct& rhs) { return !(lhs < rhs); }
+#else
+    template <class U, std::size_t S2, std::size_t A2>
+    friend auto operator!=(const direct& lhs, const direct<U, S2, A2>& rhs) noexcept(noexcept(*lhs == *rhs))
+        -> decltype(static_cast<bool>(*lhs == *rhs)) {
+        return !(*lhs == *rhs);
+    }
+    template <class U, std::size_t S2, std::size_t A2>
+    friend auto operator<(const direct& lhs, const direct<U, S2, A2>& rhs)
+        -> decltype(static_cast<bool>(*lhs < *rhs)) {
+        return *lhs < *rhs;
+    }
+    template <class U, std::size_t S2, std::size_t A2>
+    friend auto operator>(const direct& lhs, const direct<U, S2, A2>& rhs)
+        -> decltype(static_cast<bool>(*rhs < *lhs)) {
+        return *rhs < *lhs;
+    }
+    template <class U, std::size_t S2, std::size_t A2>
+    friend auto operator<=(const direct& lhs, const direct<U, S2, A2>& rhs)
+        -> decltype(static_cast<bool>(*rhs < *lhs)) {
+        return !(*rhs < *lhs);
+    }
+    template <class U, std::size_t S2, std::size_t A2>
+    friend auto operator>=(const direct& lhs, const direct<U, S2, A2>& rhs)
+        -> decltype(static_cast<bool>(*lhs < *rhs)) {
+        return !(*lhs < *rhs);
+    }
 #endif
 
   private:

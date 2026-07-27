@@ -91,22 +91,20 @@ TEST(Direct, EqualityCompares) {
     EXPECT_FALSE(a == b);
 }
 
-#if BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
-TEST(Direct, ThreeWayCompares) {
-    direct<int, sizeof(int), alignof(int)> a(1), b(2);
-    EXPECT_TRUE(a < b);
-    EXPECT_TRUE((a <=> b) < 0);
-}
-#else
-TEST(Direct, RelationalFallbackCompares) {
+// The relational operators are available in both configurations: rewritten
+// from operator<=> under C++20, defined individually in the fallback. Only
+// the spelling of <=> itself needs guarding.
+TEST(Direct, RelationalCompares) {
     direct<int, sizeof(int), alignof(int)> a(1), b(2);
     EXPECT_TRUE(a < b);
     EXPECT_TRUE(a <= b);
     EXPECT_TRUE(b > a);
     EXPECT_TRUE(b >= a);
     EXPECT_TRUE(a != b);
-}
+#if BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
+    EXPECT_TRUE((a <=> b) < 0);
 #endif
+}
 
 TEST(Direct, ComparisonsDoNotRequireTToBeComparable) {
     struct NoCompare {
@@ -289,3 +287,102 @@ TEST(Direct, GrowingTWithinTheReservationKeepsTheLayout) {
     direct<V2, 64, 8> d(std::in_place, V2{1, 2.0, {}});
     EXPECT_EQ(d->a, 1);
 }
+
+// -----------------------------------------------------------------------
+// Comparison operators are templates (see the note in direct.hpp).
+//
+// A non-template friend with a T-dependent return type has that type
+// computed when the class is instantiated, which would require T complete
+// where direct<T, Size, Align> is merely named. These tests pin the
+// consequences of the template form: the comparison category of T survives,
+// and reservations do not have to match.
+// -----------------------------------------------------------------------
+
+namespace {
+
+struct Weak {
+    int v;
+    // Only `<` and `==`, so any synthesized ordering is weak_ordering.
+    bool operator==(const Weak& o) const { return v == o.v; }
+    bool operator<(const Weak& o) const { return v < o.v; }
+};
+
+template <class T, std::size_t S = sizeof(T), std::size_t A = alignof(T)>
+using D = direct<T, S, A>;
+
+} // namespace
+
+#ifdef BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
+    #define BEMAN_THREEWAY_COMPARE_EXPECT_TRUE(condition) EXPECT_TRUE(condition)
+#else
+    #define BEMAN_THREEWAY_COMPARE_EXPECT_TRUE(condition) ((void)0)
+#endif
+
+TEST(Direct, ComparesAcrossDifferentReservations) {
+    // Same T, deliberately different Size and Align. A non-template
+    // operator could only compare identical direct types.
+    direct<int, sizeof(int), alignof(int)> small(1);
+    direct<int, 64, 32>                    roomy(2);
+
+    EXPECT_TRUE(small < roomy);
+    EXPECT_TRUE(roomy > small);
+    EXPECT_TRUE(small <= roomy);
+    EXPECT_TRUE(roomy >= small);
+    EXPECT_TRUE(small != roomy);
+    EXPECT_FALSE(small == roomy);
+
+    direct<int, 128, 64> same_value(1);
+    EXPECT_TRUE(small == same_value);
+    EXPECT_TRUE(small <= same_value);
+    EXPECT_TRUE(small >= same_value);
+
+    BEMAN_THREEWAY_COMPARE_EXPECT_TRUE((small <=> roomy) < 0);
+    BEMAN_THREEWAY_COMPARE_EXPECT_TRUE((small <=> same_value) == 0);
+}
+
+TEST(Direct, ComparesAcrossDifferentContainedTypes) {
+    // Different T as well as different reservations: the operators require
+    // only that the two contained types be comparable with each other.
+    direct<int, sizeof(int), alignof(int)> i(1);
+    direct<long, 64, 32>                   l(2);
+
+    EXPECT_FALSE(i == l);
+    EXPECT_TRUE(i != l);
+    EXPECT_TRUE(i < l);
+    EXPECT_TRUE(l > i);
+
+    direct<long, 128, 64> equal_value(1);
+    EXPECT_TRUE(i == equal_value);
+
+    BEMAN_THREEWAY_COMPARE_EXPECT_TRUE((i <=> l) < 0);
+    BEMAN_THREEWAY_COMPARE_EXPECT_TRUE((i <=> equal_value) == 0);
+}
+
+TEST(Direct, OrderingForTypeWithOnlyLessThan) {
+    direct<Weak, sizeof(Weak), alignof(Weak)> a(Weak{1}), b(Weak{2});
+    EXPECT_TRUE(a < b);
+    EXPECT_FALSE(a == b);
+    // Synthesized from `<`, so the category is weak_ordering.
+    BEMAN_THREEWAY_COMPARE_EXPECT_TRUE((a <=> b) < 0);
+}
+
+#if BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
+
+// Genuinely three-way-only: the category of T's own comparison is what
+// comes back. A single non-template signature could not produce all of
+// these, since the return type differs per T.
+namespace {
+struct Strong {
+    int  v;
+    auto operator<=>(const Strong&) const = default;
+    bool operator==(const Strong&) const  = default;
+};
+} // namespace
+
+static_assert(std::is_same_v<decltype(std::declval<D<int>>() <=> std::declval<D<int>>()), std::strong_ordering>);
+static_assert(
+    std::is_same_v<decltype(std::declval<D<double>>() <=> std::declval<D<double>>()), std::partial_ordering>);
+static_assert(std::is_same_v<decltype(std::declval<D<Strong>>() <=> std::declval<D<Strong>>()), std::strong_ordering>);
+static_assert(std::is_same_v<decltype(std::declval<D<Weak>>() <=> std::declval<D<Weak>>()), std::weak_ordering>);
+
+#endif // BEMAN_DIRECT_USE_THREE_WAY_COMPARISON

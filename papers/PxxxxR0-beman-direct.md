@@ -100,9 +100,30 @@ third is not:
   `reinterpret_cast<T*>` from the storage. For a `U` whose `T` base is not at offset
   zero — any case where `T` is not the primary base — that address is wrong. Only
   `static_cast<T*>` applied to a `U*` produces the correct pointer, and by the time an
-  observer runs, `U` is not known. Fixing this means storing the converted pointer, at
-  the cost of a pointer per object and fix-ups in every special member, which
-  contradicts the fixed-layout property that motivates the type.
+  observer runs, `U` is not known.
+
+  This is the cheapest of the three to fix. What has to be remembered is an offset
+  within the storage, not a pointer, so its width is bounded by `Size`: a single byte
+  covers any `Size <= 256`, and `Size` is chosen by the author. Nor does computing it
+  require the pointer-to-member tricks such an offset usually implies, because a
+  `direct` has a live `U` at the moment it needs the value:
+
+  ```cpp
+  // At construction, where U is known and the object exists.
+  U* u = /* placement-new'd into storage_ */;
+  offset_ = static_cast<offset_type>(
+      reinterpret_cast<std::byte*>(static_cast<T*>(u)) -
+      reinterpret_cast<std::byte*>(u));
+  ```
+
+  Every step there is defined: `static_cast` to an accessible base of a live object,
+  and a difference between two addresses within one complete object. Contrast the
+  compile-time formulations, which need an offset without an object and end up
+  ABI-specific — Boost.Intrusive's
+  [`parent_from_member.hpp`](https://www.boost.org/doc/libs/1_81_0/boost/intrusive/detail/parent_from_member.hpp)
+  carries three implementations selected by compiler, and comments that the
+  GCC/Clang one relies on undefined behavior. Since this proposal is not
+  `constexpr` anyway, the runtime form is sufficient and avoids all of that.
 - **Destruction.** `ptr()->~T()` destroys only the `T` subobject, which is undefined
   for a `U`. This one really is solvable: requiring a virtual destructor on `T` makes
   the call dispatch to `~U`.
@@ -146,7 +167,41 @@ inherent: they construct or destroy a `T`. For `operator*` and `operator->` it f
 from `std::launder`, which is specified for complete object types only. This differs
 from `unique_ptr<T>`, whose accessors instantiate with `T` incomplete.
 
-An accessor that does not require completeness is possible; see
+This is a real limitation, not merely a formality. The natural way to expose a
+pimpl'd implementation is a one-line accessor in the header:
+
+```cpp
+// widget.hpp -- does NOT compile: operator-> needs Impl complete.
+struct Data;
+class widget {
+    std::direct<Data, 64, 8> data_;
+  public:
+    Data* get() { return data_.operator->(); }
+};
+```
+
+Because the accessors require completeness, `get` has to be declared in the header
+and defined in the translation unit where `Impl` is complete, alongside the special
+members that already live there:
+
+```cpp
+// widget.hpp
+struct Data;
+class widget {
+    std::direct<Data, 64, 8> data_;
+  public:
+    Data* get();
+};
+
+// widget.cpp -- Impl is complete here
+Impl* widget::get() { return impl_.operator->(); }
+```
+
+That is the same discipline the special members already require, so it adds no new
+rule — but it does mean an accessor cannot be inlined into the header, and callers in
+other translation units pay a function call they would not pay with `unique_ptr` (modulo LTO'ing).
+Whether that cost is worth removing is discussed under
+
 [Open questions](#open-questions).
 
 ### `emplace` and the no-valueless-state obligation
@@ -182,9 +237,13 @@ The following properties of `T` are observable through `direct<T, Size, Align>`.
 - **Value category on access.** `operator*` is ref-qualified, so accessing an rvalue
   `direct` yields `T&&`.
 
-Evaluation of the exception specifications is itself deferred to the point each member
-is needed, so retaining `noexcept` does not conflict with the completeness requirements
-above.
+Evaluation of the exception specifications is deferred to the point each member is
+needed, so retaining `noexcept` does not conflict with the completeness requirements
+above at the *declaration* site. It does, however, mean that querying one of these
+specifications — as `std::vector` does when choosing between moving and copying —
+requires `T` to be complete. That is an unstated requirement on an otherwise
+incomplete-type-friendly interface, and whether these specifications should depend on
+`T` at all is unresolved; see [Open questions](#open-questions).
 
 ## Properties of `T` that are not retained
 
@@ -281,8 +340,12 @@ namespace std {
     T&& operator*() &&; const T&& operator*() const&&;
     T* operator->(); const T* operator->() const;
 
-    friend bool operator==(const direct&, const direct&);
-    friend /* synthesized */ operator<=>(const direct&, const direct&);
+    template <class U, size_t S2, size_t A2>
+      friend auto operator==(const direct&, const direct<U, S2, A2>&)
+        -> decltype(static_cast<bool>(declval<const T&>() == declval<const U&>()));
+    template <class U, size_t S2, size_t A2>
+      friend synth-three-way-result<T, U>
+        operator<=>(const direct&, const direct<U, S2, A2>&);
   };
 }
 ```
@@ -405,16 +468,26 @@ indicated cv- and ref-qualification.
 ### Comparison operators
 
 ```cpp
-friend bool operator==(const direct& lhs, const direct& rhs)
-  noexcept(noexcept(*lhs == *rhs));                                               // (1)
-friend synth-three-way-result<T> operator<=>(const direct& lhs, const direct& rhs); // (2)
+template <class U, size_t S2, size_t A2>
+  friend auto operator==(const direct& lhs, const direct<U, S2, A2>& rhs)
+    noexcept(noexcept(*lhs == *rhs))
+    -> decltype(static_cast<bool>(*lhs == *rhs));                                 // (1)
+template <class U, size_t S2, size_t A2>
+  friend synth-three-way-result<T, U>
+    operator<=>(const direct& lhs, const direct<U, S2, A2>& rhs);                 // (2)
 ```
 
 1. *Returns*: `*lhs == *rhs`.
 2. *Returns*: `synth-three-way(*lhs, *rhs)`.
 
-Neither is instantiated unless used, so a `T` with no comparison operators remains a
-valid `direct` argument provided no two `direct` objects are compared.
+These are templates rather than non-template friends deliberately. A non-template
+friend whose return type depends on `T` has that type computed when the class is
+instantiated, which would require `T` to be complete wherever
+`direct<T, Size, Align>` is named — defeating the type's purpose. Being templates
+also makes them SFINAE-friendly, so a `T` with no comparison operators removes them
+from the overload set rather than relying on their bodies never being instantiated,
+and it lets two `direct` objects holding comparable types compare regardless of their
+`Size` and `Align`.
 
 A feature-test macro `__cpp_lib_direct` should be added to `<version>` and `<memory>`.
 
@@ -564,9 +637,51 @@ diagnostic identifies the member and the two sizes.
   leave an operand valueless); `std::hash` could delegate to `std::hash<T>`. Both are
   additive and could be adopted without affecting the rest of the design.
 
+- **Exception specifications that depend on `T`.** The non-template special members
+  are specified as `noexcept(is_nothrow_move_constructible_v<T>)` and similar. Those
+  specifications are instantiated lazily, so declaring a `direct<T, Size, Align>`
+  member with an incomplete `T` is well-formed — but any *query* of the specification
+  requires `T` to be complete, and the queries are easy to reach unintentionally.
+  `std::vector<Holder>` is enough: `vector` consults
+  `is_nothrow_move_constructible_v` to decide between moving and copying on
+  reallocation, and the query propagates into `T`.
+
+  So the interface currently has an unstated completeness requirement, reachable from
+  a standard container rather than from user code. `indirect` does not have this
+  problem: its move constructor is unconditionally `noexcept` because it transfers a
+  pointer, and its assignment specification depends on the allocator rather than on
+  `T`. `direct` cannot copy that, since its move genuinely runs `T`'s move
+  constructor.
+
+  Removing the dependency makes `direct<T, Size, Align>` never
+  nothrow-move-constructible, which costs the move-on-reallocation optimization for
+  every container of `direct`. Keeping it leaves a requirement that is invisible
+  until a container triggers it. A third option is to keep the dependency only on the
+  templated constructors, where deferral is genuine, and drop it from the five
+  non-template members. We have no recommendation yet; this needs LEWG input on
+  whether an unstated completeness requirement of this kind is acceptable, and it is
+  the most consequential open question here.
+  `tests/beman/direct/fail_nothrow_trait_incomplete.test.cpp` pins the current
+  behavior.
+
+- **`emplace` and `noexcept`.** `emplace` currently states a precondition that the
+  selected constructor of `T` not throw, leaving the behavior undefined if it does.
+  Declaring `emplace` itself `noexcept` would replace that undefined behavior with
+  `std::terminate`: identical when the constructor does not throw, defined and
+  diagnosable when it does, and it forecloses a `valueless_by_exception` state
+  explicitly rather than by omission. The counter-argument is that it converts a
+  potentially recoverable situation into process death, and that a caller who knows
+  the constructor cannot throw gets nothing from it.
+
+  The broader question is whether it is acceptable for a library type to impose a
+  `noexcept` requirement on operations of a user's `T` in order to keep its own
+  invariants — a pattern the standard containers already rely on for strong exception
+  guarantees, but by *querying* `noexcept` and choosing a strategy rather than by
+  *requiring* it. Which of those two models `direct` should follow is unresolved.
+
 - **An inline-storage polymorphic type.** The analysis under
   [No polymorphism / type erasure](#no-polymorphism--type-erasure) shows that storing a
-  derived `U` needs a stored pointer and a type-erased operation set — a sibling of
+  derived `U` needs a remembered offset and a type-erased operation set — a sibling of
   `polymorphic` with inline storage rather than a relaxation of `direct`. Such a type
   would be a reasonable follow-on proposal: it has the same ABI-headroom motivation and
   the same fixed-layout property, and it would subsume the `fixed_capacity`-style
