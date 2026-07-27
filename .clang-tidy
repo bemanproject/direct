@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+#
+# clangd is configured to run these live (see the Editor setup section of
+# CONTRIBUTING.md), so findings appear as editor diagnostics as well as in a
+# batch clang-tidy run.
+#
+# The list is deliberately narrow. Checks that fight this library's design
+# are disabled explicitly below rather than left to produce noise that
+# everyone learns to ignore.
+Checks: >
+  -*,
+  bugprone-*,
+  misc-*,
+  performance-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -misc-non-private-member-variables-in-classes,
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  -readability-function-cognitive-complexity,
+  -readability-braces-around-statements,
+  -readability-avoid-nested-conditional-operator,
+  -readability-redundant-inline-specifier,
+  -readability-identifier-naming,
+  -readability-named-parameter
+
+# readability-identifier-naming is off deliberately. The codebase has two
+# legitimate conventions -- snake_case for the library's own names, which
+# mirror the standard library, and PascalCase for test types, which follows
+# GoogleTest -- and no single setting expresses both. clang-format already
+# handles the mechanical part of style.
+#
+# readability-named-parameter is off because the tag-dispatch parameters
+# (std::in_place_t) are conventionally unnamed, as they are in the standard
+# library's own declarations.
+
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*/(include|tests|examples)/.*'
+FormatStyle: file

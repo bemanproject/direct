@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+#
+# Inherits the root .clang-tidy and switches off checks that are useful for
+# library code but wrong for tests. Each is disabled for a stated reason
+# rather than because it was noisy.
+Checks: >
+  -misc-const-correctness,
+  -performance-unnecessary-copy-initialization,
+  -misc-use-internal-linkage,
+  -readability-isolate-declaration,
+  -readability-uppercase-literal-suffix
+
+# - misc-const-correctness / performance-unnecessary-copy-initialization:
+#   these tests exist to exercise copy, move, and assignment. `widget w2 =
+#   w1;` is flagged as an avoidable copy, but the copy is the subject of the
+#   test; taking a reference instead would test nothing. Likewise a const
+#   subject would not compile the mutating cases.
+#
+# - misc-use-internal-linkage: the compile-fixture translation units define a
+#   free `use()` whose only purpose is to force instantiation. Giving it
+#   internal linkage is irrelevant, and these files are built as object
+#   libraries that are never linked.
+#
+# - readability-isolate-declaration: `direct<int, ...> a(1), b(2), c(1);`
+#   reads better on one line when the three are a single comparison fixture.
+#
+# - readability-uppercase-literal-suffix: the `u` suffixes exist to match
+#   size_t in EXPECT_EQ comparisons. Their case carries no meaning.

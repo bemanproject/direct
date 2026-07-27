@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+# This is the config file for beman-tidy, which checks compliance with the Beman Standard (https://github.com/bemanproject/beman/blob/main/docs/beman_standard.md)
+# Check documentation for beman-tidy here:
+# https://github.com/bemanproject/beman-tidy/blob/main/README.md
+
+# Disabled until the corresponding external artifacts exist:
+# - readme.implements requires a real WG21 paper number with a wg21.link
+#   URL; this library implements a draft paper (papers/PxxxxR0-*) that has
+#   not been submitted, so no such number exists yet. Re-enable when one does.
+# - release.godbolt_trunk_version requires a published Compiler Explorer
+#   example badge; add one and re-enable once the repo is public.
+disabled_rules:
+    - readme.implements
+    - release.godbolt_trunk_version
+ignored_paths:
+    - infra/
+    # Local, git-ignored scratch/cache dirs that are not part of the
+    # repository. beman-tidy does not read .gitignore, so these must be
+    # listed here explicitly or their contents trip path-layout checks
+    # (e.g. clangd writes .cache/clangd/index/*.test.cpp.*.idx, which
+    # otherwise fails directory.tests).
+    - .superpowers/
+    - .cache/
