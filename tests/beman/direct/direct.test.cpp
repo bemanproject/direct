@@ -312,7 +312,7 @@ using D = direct<T, S, A>;
 
 } // namespace
 
-#ifdef BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
+#if BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
     #define BEMAN_THREEWAY_COMPARE_EXPECT_TRUE(condition) EXPECT_TRUE(condition)
 #else
     #define BEMAN_THREEWAY_COMPARE_EXPECT_TRUE(condition) ((void)0)
