@@ -6,7 +6,7 @@
 #include <utility>
 
 // Impl becomes complete here. This is the only TU where
-// direct<Impl,32,alignof(std::string)>'s special members are
+// direct<Impl, 64, alignof(std::max_align_t)>'s special members are
 // instantiated -- which is why widget's special members must stay
 // declaration-only in the header and be defined (even if just
 // `= default`) here, not inline in widget.hpp.

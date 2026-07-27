@@ -48,8 +48,11 @@ class widget {
     static std::size_t impl_size() noexcept;
     static std::size_t impl_align() noexcept;
 
-    // The reservation itself, usable from any TU.
-    static constexpr std::size_t storage_size  = 48;
+    // Enough bytes for an Impl that holds one std::string:
+    // libc++: 24 bytes
+    // MSVC: 32
+    // MSVC (debug): 40
+    static constexpr std::size_t storage_size  = 64;
     static constexpr std::size_t storage_align = alignof(std::max_align_t);
 
   private:

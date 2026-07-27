@@ -28,7 +28,11 @@ class widget {
 
   private:
     struct Impl;
-    beman::direct::direct<Impl, 32, alignof(std::string)> impl_;
+    // 64 bytes for an Impl that currently holds one std::string:
+    // libc++: 24 bytes
+    // MSVC: 32
+    // MSVC (debug): 40
+    beman::direct::direct<Impl, 64, alignof(std::max_align_t)> impl_;
 };
 
 #endif // BEMAN_DIRECT_EXAMPLES_WIDGET_HPP
