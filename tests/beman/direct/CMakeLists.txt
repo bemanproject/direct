@@ -12,18 +12,7 @@ target_link_libraries(
 include(GoogleTest)
 gtest_discover_tests(beman.direct.tests.direct DISCOVERY_TIMEOUT 60)
 
-# The pimpl boundary is enforced structurally, not just by convention: the
-# TU that defines widget::Impl is compiled into its own library, and the test
-# program links against it. Nothing but a link symbol crosses between them,
-# so the test program cannot accidentally acquire Impl's definition.
-#
-# TODO: add a SHARED-library variant of this test.
-#
-# A static library proves the TUs are separately compiled and linked, which
-# is what the incomplete-type property needs. It does not exercise the other
-# half of the motivation for pimpl: a stable ABI across a shared-library
-# boundary, where the point of the fixed-size storage is that rebuilding the
-# library after Impl changes shape does not require rebuilding consumers.
+# TODO: add a SHARED-library variant of this test. Dynamically link different impl TU's.
 #
 # Doing this properly needs symbol-visibility handling that differs per
 # platform -- __declspec(dllexport)/dllimport on Windows versus
