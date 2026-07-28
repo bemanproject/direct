@@ -9,9 +9,6 @@ target_link_libraries(
     PRIVATE beman::direct GTest::gtest_main
 )
 
-include(GoogleTest)
-gtest_discover_tests(beman.direct.tests.direct DISCOVERY_TIMEOUT 60)
-
 # TODO: add a SHARED-library variant of this test. Dynamically link different impl TU's.
 #
 # Doing this properly needs symbol-visibility handling that differs per
@@ -33,7 +30,19 @@ target_link_libraries(
     beman.direct.tests.incomplete
     PRIVATE beman.direct.tests.widget GTest::gtest_main
 )
-gtest_discover_tests(beman.direct.tests.incomplete DISCOVERY_TIMEOUT 60)
+
+include(GoogleTest)
+# defer discovery to execution time to workaround MSVC issue
+gtest_discover_tests(
+    beman.direct.tests.direct
+    DISCOVERY_TIMEOUT 60
+    DISCOVERY_MODE PRE_TEST
+)
+gtest_discover_tests(
+    beman.direct.tests.incomplete
+    DISCOVERY_TIMEOUT 60
+    DISCOVERY_MODE PRE_TEST
+)
 
 function(beman_direct_add_compile_failure_test name source expected_text)
     set(target "beman.direct.tests.${name}")
