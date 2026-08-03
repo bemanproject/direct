@@ -1,7 +1,7 @@
 # `direct<T, Size, Align>`: An inline-storage pimpl vocabulary type
 
 | | |
-|---|---|
+| --- | --- |
 | Document #: | PxxxxR0 |
 | Date: | 2026-07-24 |
 | Project: | ISO/IEC JTC1/SC22/WG21 Programming Language C++ |
@@ -307,7 +307,7 @@ Conditional triviality and the `swap`/`hash` questions are revisited under
 ## Comparison
 
 | | `unique_ptr<T>` pimpl | `indirect<T>` | `direct<T, Size, Align>` |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Storage | heap | heap | inline |
 | Allocation per construction | yes | yes | no |
 | Value semantics (copy) | manual | automatic | automatic |
