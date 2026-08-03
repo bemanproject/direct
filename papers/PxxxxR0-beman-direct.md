@@ -314,12 +314,37 @@ Conditional triviality and the `swap`/`hash` questions are revisited under
 | Move | pointer swap | pointer swap (usually) | invokes `T`'s move ctor |
 | Valueless state after move | n/a (nullable by design) | yes | no |
 | `T` may be incomplete in header | yes | yes | yes |
+| `T` may refer to itself | yes | yes | no |
 | Requires explicit `Size`/`Align` | no | no | yes |
 | `constexpr`-friendly | no | yes (allocator-dependent) | no |
 
+### Recursive `T`
+
+`direct<T, Size, Align>` cannot hold a `T` that contains one. A tree node is the usual
+example:
+
+```cpp
+struct node {
+    std::string           value;
+    std::direct<node, 64> child;   // ill-formed
+};
+```
+
+This is not a restriction the type imposes. Storing a value inline means the containing
+object's size includes the contained one's, so a type that contains itself by value has
+no finite size; `struct node { node child; };` is ill-formed for the identical reason,
+and no choice of `Size` avoids it. Every by-value member has this property. The
+indirection is what breaks the cycle, which is why `unique_ptr<T>` and `indirect<T>` can
+express a recursive `T` and this cannot — `indirect` in particular is designed for it,
+and its recursive-variant example is the case to reach for when a type refers to itself.
+
+The two are complementary rather than competing here: reach for `indirect` when the
+shape is recursive, and for `direct` when it is not and the allocation is worth
+removing.
+
 ## Proposed wording
 
-> Note: the synopsis and per-member semantics below are settled; they will be rendered
+> Note: the synopsis and per-member semantics will be rendered
 > as standardese against the working draft in R1.
 >
 > Throughout, every member carries the Mandates `sizeof(T) <= Size` and
@@ -681,7 +706,7 @@ diagnostic identifies the member and the two sizes.
   every container of `direct`. Keeping it leaves a requirement that is invisible
   until a container triggers it. A third option is to keep the dependency only on the
   templated constructors, where deferral is genuine, and drop it from the five
-  non-template members. We have no recommendation yet; this needs LEWG input on
+  non-template members. We have no recommendation yet; this needs input on
   whether an unstated completeness requirement of this kind is acceptable, and it is
   the most consequential open question here.
   `tests/beman/direct/fail_nothrow_trait_incomplete.test.cpp` pins the current
