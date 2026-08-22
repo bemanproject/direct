@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include <beman/direct/direct.hpp>
-// For BEMAN_DIRECT_USE_THREE_WAY_COMPARISON, used to guard a test below.
-#include <beman/direct/detail/config.hpp>
 
 #include "test_helpers.hpp"
 
@@ -91,9 +89,6 @@ TEST(Direct, EqualityCompares) {
     EXPECT_FALSE(a == b);
 }
 
-// The relational operators are available in both configurations: rewritten
-// from operator<=> under C++20, defined individually in the fallback. Only
-// the spelling of <=> itself needs guarding.
 TEST(Direct, RelationalCompares) {
     direct<int, sizeof(int), alignof(int)> a(1), b(2);
     EXPECT_TRUE(a < b);
@@ -101,9 +96,7 @@ TEST(Direct, RelationalCompares) {
     EXPECT_TRUE(b > a);
     EXPECT_TRUE(b >= a);
     EXPECT_TRUE(a != b);
-#if BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
     EXPECT_TRUE((a <=> b) < 0);
-#endif
 }
 
 TEST(Direct, ComparisonsDoNotRequireTToBeComparable) {
@@ -312,12 +305,6 @@ using D = direct<T, S, A>;
 
 } // namespace
 
-#if BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
-    #define BEMAN_THREEWAY_COMPARE_EXPECT_TRUE(condition) EXPECT_TRUE(condition)
-#else
-    #define BEMAN_THREEWAY_COMPARE_EXPECT_TRUE(condition) ((void)0)
-#endif
-
 TEST(Direct, ComparesAcrossDifferentReservations) {
     // Same T, deliberately different Size and Align. A non-template
     // operator could only compare identical direct types.
@@ -336,8 +323,8 @@ TEST(Direct, ComparesAcrossDifferentReservations) {
     EXPECT_TRUE(small <= same_value);
     EXPECT_TRUE(small >= same_value);
 
-    BEMAN_THREEWAY_COMPARE_EXPECT_TRUE((small <=> roomy) < 0);
-    BEMAN_THREEWAY_COMPARE_EXPECT_TRUE((small <=> same_value) == 0);
+    EXPECT_TRUE((small <=> roomy) < 0);
+    EXPECT_TRUE((small <=> same_value) == 0);
 }
 
 TEST(Direct, ComparesAcrossDifferentContainedTypes) {
@@ -354,8 +341,8 @@ TEST(Direct, ComparesAcrossDifferentContainedTypes) {
     direct<long, 128, 64> equal_value(1);
     EXPECT_TRUE(i == equal_value);
 
-    BEMAN_THREEWAY_COMPARE_EXPECT_TRUE((i <=> l) < 0);
-    BEMAN_THREEWAY_COMPARE_EXPECT_TRUE((i <=> equal_value) == 0);
+    EXPECT_TRUE((i <=> l) < 0);
+    EXPECT_TRUE((i <=> equal_value) == 0);
 }
 
 TEST(Direct, OrderingForTypeWithOnlyLessThan) {
@@ -363,10 +350,8 @@ TEST(Direct, OrderingForTypeWithOnlyLessThan) {
     EXPECT_TRUE(a < b);
     EXPECT_FALSE(a == b);
     // Synthesized from `<`, so the category is weak_ordering.
-    BEMAN_THREEWAY_COMPARE_EXPECT_TRUE((a <=> b) < 0);
+    EXPECT_TRUE((a <=> b) < 0);
 }
-
-#if BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
 
 // Genuinely three-way-only: the category of T's own comparison is what
 // comes back. A single non-template signature could not produce all of
@@ -384,8 +369,6 @@ static_assert(
     std::is_same_v<decltype(std::declval<D<double>>() <=> std::declval<D<double>>()), std::partial_ordering>);
 static_assert(std::is_same_v<decltype(std::declval<D<Strong>>() <=> std::declval<D<Strong>>()), std::strong_ordering>);
 static_assert(std::is_same_v<decltype(std::declval<D<Weak>>() <=> std::declval<D<Weak>>()), std::weak_ordering>);
-
-#endif // BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
 
 // -----------------------------------------------------------------------
 // BEMAN_DIRECT_IS_COMPLETE recomputes its answer at each use.

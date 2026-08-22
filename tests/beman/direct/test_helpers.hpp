@@ -3,17 +3,8 @@
 #ifndef BEMAN_DIRECT_TESTS_TEST_HELPERS_HPP
 #define BEMAN_DIRECT_TESTS_TEST_HELPERS_HPP
 
-// Provides BEMAN_DIRECT_USE_THREE_WAY_COMPARISON, used just below.
-#include <beman/direct/detail/config.hpp> // IWYU pragma: keep
-
+#include <compare> // IWYU pragma: keep -- completes the return type of int <=> int
 #include <stdexcept>
-
-#if BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
-    // Tracked's operator<=> has a deduced return type, so no name from
-    // <compare> appears here -- but `int <=> int` still requires
-    // std::strong_ordering to be complete.
-    #include <compare> // IWYU pragma: keep
-#endif
 
 namespace beman::direct::tests {
 
@@ -54,11 +45,7 @@ struct Tracked {
     ~Tracked() { ++destructs; }
 
     bool operator==(const Tracked& o) const { return value == o.value; }
-#if BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
     auto operator<=>(const Tracked& o) const { return value <=> o.value; }
-#else
-    bool operator<(const Tracked& o) const { return value < o.value; }
-#endif
 
     static void reset() { constructs = destructs = copies = moves = 0; }
 };

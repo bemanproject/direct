@@ -43,7 +43,7 @@ that this requires GoogleTest to be installed.
 cmake \
   -B build \
   -S . \
-  -DCMAKE_CXX_STANDARD=17 \
+  -DCMAKE_CXX_STANDARD=20 \
   # Your extra arguments here.
 cmake --build build
 ctest --test-dir build
@@ -53,8 +53,9 @@ ctest --test-dir build
 >
 > Beman projects are [passive projects](
 > https://github.com/bemanproject/beman/blob/main/docs/beman_standard.md#cmakepassive_projects),
-> so you need to specify the C++ version via `CMAKE_CXX_STANDARD` when manually
-> configuring the project.
+> so they do not select the C++ version on behalf of consumers. You need to
+> specify C++20 or later via `CMAKE_CXX_STANDARD` when manually configuring the
+> project.
 
 ## Dependency Management
 
@@ -73,7 +74,7 @@ Example commands:
 cmake \
   -B build \
   -S . \
-  -DCMAKE_CXX_STANDARD=17 \
+  -DCMAKE_CXX_STANDARD=20 \
   -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 cmake --build build
 ctest --test-dir build
@@ -97,7 +98,7 @@ Example commands:
 cmake \
   -B build \
   -S . \
-  -DCMAKE_CXX_STANDARD=17 \
+  -DCMAKE_CXX_STANDARD=20 \
   -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=./infra/cmake/use-fetch-content.cmake
 cmake --build build
 ctest --test-dir build
@@ -186,33 +187,13 @@ The `fail_*` fixtures are excluded because they are ill-formed on purpose; analy
 them reports the very errors they exist to produce. Note that clang-tidy exits 0 for
 warnings, so add `--warnings-as-errors='*'` if you want a non-zero status.
 
-`misc-include-cleaner` is on. Includes needed only by an inactive `#if` branch, or whose
-contribution is a macro or an operator rather than a name, carry `// IWYU pragma: keep`
-with a comment; `detail/config.hpp` marks its generated-header include
-`// IWYU pragma: export`, since it is a facade over it.
+`misc-include-cleaner` is on. Includes whose contribution is an operator rather
+than a name carry `// IWYU pragma: keep` with a comment.
 
 ## Additional verification configurations
 
-Beyond the default preset build, two configurations are worth running before
-significant changes (CI covers variants of these on Linux):
-
-### C++17 / no-concepts fallback
-
-Verifies the `BEMAN_DIRECT_USE_CONCEPTS` / `BEMAN_DIRECT_USE_THREE_WAY_COMPARISON`
-fallback branches:
-
-```bash
-cmake -S . -B build/fallback-check -G Ninja \
-    -DCMAKE_TOOLCHAIN_FILE=infra/cmake/appleclang-toolchain.cmake \
-    -DCMAKE_CXX_STANDARD=17 \
-    -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=./infra/cmake/use-fetch-content.cmake \
-    -DBEMAN_DIRECT_USE_CONCEPTS=OFF \
-    -DBEMAN_DIRECT_USE_THREE_WAY_COMPARISON=OFF
-cmake --build build/fallback-check
-ctest --test-dir build/fallback-check --output-on-failure
-```
-
-(Substitute the toolchain file for your compiler.)
+Beyond the default preset build, the following configurations are worth running
+before significant changes (CI covers variants of these on Linux):
 
 ### UndefinedBehaviorSanitizer
 
@@ -239,30 +220,22 @@ alternative.
 
 ### Installed-package check
 
-The installed package must be self-contained. That means both the checked-in
-`detail/config.hpp` (packaged via the `HEADERS` file set in
-`include/beman/direct/CMakeLists.txt`) and the CMake-*generated*
-`detail/config_generated.hpp` (packaged via the file set in the root
-`CMakeLists.txt`) — either is easy to silently lose when touching
-`target_sources`:
+The installed package must be self-contained. Both public headers are packaged
+via the `HEADERS` file set in `include/beman/direct/CMakeLists.txt`:
 
 ```bash
 cmake --install build/appleclang-release --prefix /tmp/beman-direct-install
 ls /tmp/beman-direct-install/include/beman/direct/direct.hpp \
-   /tmp/beman-direct-install/include/beman/direct/detail/config.hpp \
-   /tmp/beman-direct-install/include/beman/direct/detail/config_generated.hpp
+   /tmp/beman-direct-install/include/beman/direct/detail/config.hpp
 ```
 
 ### Vendored (no-CMake) build
 
-`detail/config.hpp` must keep working when a user copies only `include/`, with
-no generated header present ([cpp.no_flag_forking]'s vendoring fallback):
+The headers must keep working when a user copies only `include/`:
 
 ```bash
 cp -r include /tmp/vendor-check/ && cd /tmp/vendor-check
 c++ -std=c++20 -Iinclude -fsyntax-only -x c++ - <<<'#include <beman/direct/direct.hpp>'
-c++ -std=c++17 -DBEMAN_DIRECT_USE_CONCEPTS=0 -DBEMAN_DIRECT_USE_THREE_WAY_COMPARISON=0 \
-    -Iinclude -fsyntax-only -x c++ - <<<'#include <beman/direct/direct.hpp>'
 ```
 
 ## Known gaps

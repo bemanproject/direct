@@ -59,14 +59,9 @@ section for what the pattern requires.
 
 This project requires at least the following to build:
 
-* A C++ compiler that conforms to the C++17 standard or greater
+* A C++ compiler that conforms to the C++20 standard or greater
 * CMake 3.30 or later
 * (Test Only) GoogleTest
-
-C++20 is the recommended configuration. Under C++17 the library selects
-`enable_if`-based constraints and individual relational operators in place of
-concepts and `operator<=>`; both configurations are built and tested (see
-`CONTRIBUTING.md`).
 
 You can disable building tests by setting CMake option `BEMAN_DIRECT_BUILD_TESTS` to
 `OFF` when configuring the project.
@@ -87,11 +82,5 @@ additional verification configurations.
 
 ### Vendoring the headers
 
-`beman.direct` is header-only, so copying the `include/` directory into another
-project works without CMake. In that case there is no CMake-generated
-`detail/config_generated.hpp`, and `detail/config.hpp` falls back to the C++20
-feature set. To vendor into a C++17 build, select the fallback paths explicitly:
-
-```bash
-c++ -std=c++17 -DBEMAN_DIRECT_USE_CONCEPTS=0 -DBEMAN_DIRECT_USE_THREE_WAY_COMPARISON=0 ...
-```
+`beman.direct` is header-only, so copying the `include/` directory into a C++20
+project works without CMake.
