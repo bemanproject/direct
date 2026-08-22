@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <initializer_list>
+#include <memory>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -32,30 +33,23 @@ class direct {
     direct() noexcept(std::is_nothrow_default_constructible_v<T>) {
         check_fits();
         static_assert(std::is_default_constructible_v<T>, "T must be default constructible");
-        detail::construct_at_impl(reinterpret_cast<T*>(storage_));
+        std::construct_at(reinterpret_cast<T*>(storage_));
     }
 
-#if BEMAN_DIRECT_USE_CONCEPTS
     template <class U = T>
-        requires(!std::is_same_v<detail::remove_cvref_t<U>, direct> &&
-                 !std::is_same_v<detail::remove_cvref_t<U>, std::in_place_t>)
-#else
-    template <class U               = T,
-              std::enable_if_t<!std::is_same_v<detail::remove_cvref_t<U>, direct> &&
-                                   !std::is_same_v<detail::remove_cvref_t<U>, std::in_place_t>,
-                               int> = 0>
-#endif
+        requires(!std::is_same_v<std::remove_cvref_t<U>, direct> &&
+                 !std::is_same_v<std::remove_cvref_t<U>, std::in_place_t>)
     explicit direct(U&& u) noexcept(std::is_nothrow_constructible_v<T, U>) {
         check_fits();
         static_assert(std::is_constructible_v<T, U>, "T must be constructible from U");
-        detail::construct_at_impl(reinterpret_cast<T*>(storage_), std::forward<U>(u));
+        std::construct_at(reinterpret_cast<T*>(storage_), std::forward<U>(u));
     }
 
     template <class... Args>
     explicit direct(std::in_place_t, Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>) {
         check_fits();
         static_assert(std::is_constructible_v<T, Args...>, "T must be constructible from Args...");
-        detail::construct_at_impl(reinterpret_cast<T*>(storage_), std::forward<Args>(args)...);
+        std::construct_at(reinterpret_cast<T*>(storage_), std::forward<Args>(args)...);
     }
 
     template <class I, class... Args>
@@ -65,19 +59,19 @@ class direct {
         check_fits();
         static_assert(std::is_constructible_v<T, std::initializer_list<I>&, Args...>,
                       "T must be constructible from initializer_list<I>&, Args...");
-        detail::construct_at_impl(reinterpret_cast<T*>(storage_), ilist, std::forward<Args>(args)...);
+        std::construct_at(reinterpret_cast<T*>(storage_), ilist, std::forward<Args>(args)...);
     }
 
     direct(const direct& other) noexcept(std::is_nothrow_copy_constructible_v<T>) {
         check_fits();
         static_assert(std::is_copy_constructible_v<T>, "T must be copy constructible");
-        detail::construct_at_impl(reinterpret_cast<T*>(storage_), *other.ptr());
+        std::construct_at(reinterpret_cast<T*>(storage_), *other.ptr());
     }
 
     direct(direct&& other) noexcept(std::is_nothrow_move_constructible_v<T>) {
         check_fits();
         static_assert(std::is_move_constructible_v<T>, "T must be move constructible");
-        detail::construct_at_impl(reinterpret_cast<T*>(storage_), std::move(*other.ptr()));
+        std::construct_at(reinterpret_cast<T*>(storage_), std::move(*other.ptr()));
     }
 
     // [direct.assign]
@@ -124,7 +118,7 @@ class direct {
         check_fits();
         static_assert(std::is_constructible_v<T, Args...>, "T must be constructible from Args...");
         ptr()->~T();
-        return *detail::construct_at_impl(reinterpret_cast<T*>(storage_), std::forward<Args>(args)...);
+        return *std::construct_at(reinterpret_cast<T*>(storage_), std::forward<Args>(args)...);
     }
 
     template <class I, class... Args>
@@ -133,7 +127,7 @@ class direct {
         static_assert(std::is_constructible_v<T, std::initializer_list<I>&, Args...>,
                       "T must be constructible from initializer_list<I>&, Args...");
         ptr()->~T();
-        return *detail::construct_at_impl(reinterpret_cast<T*>(storage_), ilist, std::forward<Args>(args)...);
+        return *std::construct_at(reinterpret_cast<T*>(storage_), ilist, std::forward<Args>(args)...);
     }
 
     // [direct.obs]
@@ -178,38 +172,10 @@ class direct {
         return *lhs == *rhs;
     }
 
-#if BEMAN_DIRECT_USE_THREE_WAY_COMPARISON
     template <class U, std::size_t S2, std::size_t A2>
     friend auto operator<=>(const direct& lhs, const direct<U, S2, A2>& rhs) -> detail::synth_three_way_result<T, U> {
         return detail::synth_three_way(*lhs, *rhs);
     }
-#else
-    template <class U, std::size_t S2, std::size_t A2>
-    friend auto operator!=(const direct& lhs, const direct<U, S2, A2>& rhs) noexcept(noexcept(*lhs == *rhs))
-        -> decltype(static_cast<bool>(*lhs == *rhs)) {
-        return !(*lhs == *rhs);
-    }
-    template <class U, std::size_t S2, std::size_t A2>
-    friend auto operator<(const direct& lhs, const direct<U, S2, A2>& rhs)
-        -> decltype(static_cast<bool>(*lhs < *rhs)) {
-        return *lhs < *rhs;
-    }
-    template <class U, std::size_t S2, std::size_t A2>
-    friend auto operator>(const direct& lhs, const direct<U, S2, A2>& rhs)
-        -> decltype(static_cast<bool>(*rhs < *lhs)) {
-        return *rhs < *lhs;
-    }
-    template <class U, std::size_t S2, std::size_t A2>
-    friend auto operator<=(const direct& lhs, const direct<U, S2, A2>& rhs)
-        -> decltype(static_cast<bool>(*rhs < *lhs)) {
-        return !(*rhs < *lhs);
-    }
-    template <class U, std::size_t S2, std::size_t A2>
-    friend auto operator>=(const direct& lhs, const direct<U, S2, A2>& rhs)
-        -> decltype(static_cast<bool>(*lhs < *rhs)) {
-        return !(*lhs < *rhs);
-    }
-#endif
 
   private:
     static void check_fits() noexcept {
