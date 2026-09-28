@@ -21,4 +21,5 @@ ignored_paths:
     # (e.g. clangd writes .cache/clangd/index/*.test.cpp.*.idx, which
     # otherwise fails directory.tests).
     - .superpowers/
+    - .worktrees/
     - .cache/
